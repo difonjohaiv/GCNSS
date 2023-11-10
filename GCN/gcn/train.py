@@ -41,7 +41,7 @@ parser.add_argument('--sample_size', type=float, default=0.,
                     help='sample size')
 parser.add_argument('--neg_type', type=float, default=0,
                     help='0,selection;1 not selection')
-parser.add_argument('--encoder_type', type=int, default=3,
+parser.add_argument('--encoder_type', type=int, default=2,
                     help='do data augmentation.')
 parser.add_argument('--debias', type=float, default=0.,
                     help='debias rate.')
@@ -92,10 +92,10 @@ idx_train = data.train_mask
 idx_val = data.val_mask
 idx_test = data.test_mask
 features = data.x
-features = normalize(features)
-features = torch.from_numpy(features)
+features = normalize(features)  # 归一化
+features = torch.from_numpy(features)  # 转成张量
 labels = data.y
-adj = torch.eye(data.x.shape[0])
+adj = torch.eye(data.x.shape[0])  # eye生成对角线全1，其余位置全0的方阵
 for i in range(data.edge_index.shape[1]):
     adj[data.edge_index[0][i]][data.edge_index[1][i]] = 1
 adj = adj.float()
@@ -118,11 +118,11 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
     
     #semi-supervised CE loss
     y_pre, _ = model(features, adj, encoder_type)
-    loss_train = F.nll_loss(y_pre[idx_train], labels[idx_train])
-    acc_train = accuracy(y_pre[idx_train], labels[idx_train])
+    loss_train = F.nll_loss(y_pre[idx_train], labels[idx_train])  # 利用train-set计算entropy-cross损失
+    acc_train = accuracy(y_pre[idx_train], labels[idx_train])  # 测量准确率
     
     #sample nodes 
-    node_mask = torch.empty(features.shape[0],dtype=torch.float32).uniform_(0,1).cuda()
+    node_mask = torch.empty(features.shape[0],dtype=torch.float32).uniform_(0,1).cpu()  # 采样
     node_mask = node_mask < sample_size
     
     #negative selection, neg_mask
@@ -131,20 +131,20 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
         y_pre = y_pre[node_mask]
         
         _, y_poslabel = torch.topk(y_pre, kk)
-        y_pl = torch.zeros(y_pre.shape).cuda()
+        y_pl = torch.zeros(y_pre.shape).cpu()
         y_pl = y_pl.scatter_(1, y_poslabel, 1)
         neg_mask = torch.mm(y_pl, y_pl.T) <= 0
-        neg_mask = neg_mask.cuda()
+        neg_mask = neg_mask.cpu()
         
         del y_pl, y_poslabel
         torch.cuda.empty_cache()
     else :
-        neg_mask = (1 - torch.eye(node_mask.sum())).cuda()
+        neg_mask = (1 - torch.eye(node_mask.sum())).cpu()
     
     if data_aug == 1:
         #features1 = aug_random_mask(features, 0.3)
         #features2 = aug_random_mask(features, 0.4)
-        features1 = drop_feature(features, 0.3)
+        features1 = drop_feature(features, 0.3)  # data-aug
         features2 = drop_feature(features, 0.4)
 
         _, output1 = model(features1, adj, encoder_type)
@@ -229,18 +229,20 @@ if args.encoder == 'SGC':
     features = propagate(features, adj, 2, 0.)
 
 #main 
-features = features.cuda()
-adj = adj.cuda()
-labels = labels.cuda()
-idx_train = idx_train.cuda()
-idx_val = idx_val.cuda()
-idx_test = idx_test.cuda()
-data.edge_index = data.edge_index.cuda()
+if torch.cuda.is_available():
+    features = features.cuda()
+    adj = adj.cuda()
+    labels = labels.cuda()
+    idx_train = idx_train.cuda()
+    idx_val = idx_val.cuda()
+    idx_test = idx_test.cuda()
+    data.edge_index = data.edge_index.cuda()
 
 
 
 test_acc = torch.zeros(times)
-test_acc = test_acc.cuda()
+if torch.cuda.is_available():
+    test_acc = test_acc.cuda()
 
 seed = args.seed
 random.seed(seed)
@@ -257,7 +259,7 @@ for i in range(times):
                     nhid=args.hidden,
                     nclass=labels.max().item() + 1,
                     dropout=args.dropout,
-                    tau = args.tau).cuda()
+                    tau = args.tau).cpu()
     else:
         model = MLP(nfeat=features.shape[1],
                     nhid=args.hidden,
@@ -278,8 +280,8 @@ for i in range(times):
 
 
 print("=== Final ===")
-print(torch.max(test_acc))
-print(torch.min(test_acc))
+print("最高准确率:",torch.max(test_acc))
+print("最低准确率:",torch.min(test_acc))
 #print("30次平均",torch.mean(test_acc))
 #print("30次标准差",test_acc.std())
 #print("20次平均",torch.mean(test_acc[:20]))
