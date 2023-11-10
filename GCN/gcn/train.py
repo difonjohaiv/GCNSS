@@ -37,13 +37,13 @@ parser.add_argument('--data_aug', type=int, default=1,
                     help='do data augmentation.')
 parser.add_argument('--kk', type=int, default=1,
                     help='y_pre select k')
-parser.add_argument('--sample_size', type=float, default=0.,
+parser.add_argument('--sample_size', type=float, default=0.6,
                     help='sample size')
 parser.add_argument('--neg_type', type=float, default=0,
                     help='0,selection;1 not selection')
-parser.add_argument('--encoder_type', type=int, default=2,
+parser.add_argument('--encoder_type', type=int, default=3,
                     help='do data augmentation.')
-parser.add_argument('--debias', type=float, default=0.,
+parser.add_argument('--debias', type=float, default=0.12,
                     help='debias rate.')
 parser.add_argument('--seed', type=int, default=42, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=200,
