@@ -64,16 +64,16 @@ class GCN(nn.Module):
 
     def suplabel_lossv6neg(self, z1: torch.Tensor, z2: torch.Tensor , neg_mask: torch.Tensor, debias):
         
-        s_value = torch.exp(torch.mm(z1 , z1.t()) / self.tau)
-        b_value = torch.exp(torch.mm(z1 , z2.t()) / self.tau)
+        s_value = torch.exp(torch.mm(z1 , z1.t()) / self.tau)  # intra-view
+        b_value = torch.exp(torch.mm(z1 , z2.t()) / self.tau)  # inter-view
         
-        value_zi = b_value.diag().unsqueeze(0).T
-        value_neg = (s_value + b_value) * neg_mask.float()
+        value_zi = b_value.diag().unsqueeze(0).T  # 与inter-view中的positive node。分子就是正样本的损失
+        value_neg = (s_value + b_value) * neg_mask.float()  # negative的包括intra-view和inter-view
         value_neg = value_neg.sum(dim=1, keepdim=True)
         neg_sum = 2 * neg_mask.sum(dim=1, keepdim=True)
         value_neg = (value_neg - value_zi * neg_sum * debias) / (1 - debias)
         value_neg = torch.max(value_neg, neg_sum * math.exp(-1.0 / self.tau))
-        value_mu = value_zi + value_neg
+        value_mu = value_zi + value_neg  # loss中的分母
         
         loss = -torch.log(value_zi / value_mu)
         return loss
@@ -87,7 +87,7 @@ class GCN(nn.Module):
         h1 = h1[train_mask]
         h2 = h2[train_mask]
         
-        loss1 = self.suplabel_lossv6neg(h1, h2, neg_mask, debias)
+        loss1 = self.suplabel_lossv6neg(h1, h2, neg_mask, debias)  # 不同的
         loss2 = self.suplabel_lossv6neg(h2, h1, neg_mask, debias)
         ret = (loss1 + loss2) / 2
 

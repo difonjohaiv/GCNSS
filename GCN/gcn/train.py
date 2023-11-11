@@ -88,16 +88,16 @@ data = dataset[0]
 
 
 #######数据处理
-idx_train = data.train_mask
-idx_val = data.val_mask
-idx_test = data.test_mask
+idx_train = data.train_mask  # 140个训练样本
+idx_val = data.val_mask  # 500个验证
+idx_test = data.test_mask  # 1000个测试样本
 features = data.x
-features = normalize(features)  # 归一化
+features = normalize(features)  # 归一化后的结果是ndarray
 features = torch.from_numpy(features)  # 转成张量
 labels = data.y
 adj = torch.eye(data.x.shape[0])  # eye生成对角线全1，其余位置全0的方阵
 for i in range(data.edge_index.shape[1]):
-    adj[data.edge_index[0][i]][data.edge_index[1][i]] = 1
+    adj[data.edge_index[0][i]][data.edge_index[1][i]] = 1  # 把一个点到点的邻接矩阵转变成二维邻接矩阵
 adj = adj.float()
 adj = adj_nor(adj)
 
@@ -122,11 +122,11 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
     acc_train = accuracy(y_pre[idx_train], labels[idx_train])  # 测量准确率
     
     #sample nodes 
-    node_mask = torch.empty(features.shape[0],dtype=torch.float32).uniform_(0,1).cpu()  # 采样
-    node_mask = node_mask < sample_size
+    node_mask = torch.empty(features.shape[0],dtype=torch.float32).uniform_(0,1).cpu()  # 创建了一个随机数（dim=2708）
+    node_mask = node_mask < sample_size  # 对于小于sample_size==0.6的设置为true，否则为false。node_mask为参与对比学习的节点
     
     #negative selection, neg_mask
-    if neg_type == 0:
+    if neg_type == 0:  # 采用negative selecting strategy
         y_pre = y_pre.detach()
         y_pre = y_pre[node_mask]
         
@@ -158,7 +158,7 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
         pass
             
     if neg_type == 0:    
-        if epoch<=50:
+        if epoch<=50:  # 前50轮中，对比损失是依赖标签来计算的，但是此时的acc_train比较低。所以计算出来的对比损失意义不大，所以乘以0.0001来缩小
             loss = loss_train + 0.0001 * loss_cl
         else:
             loss = loss_train + 0.8 * loss_cl
@@ -169,7 +169,7 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
     loss.backward()
     optimizer.step()
             
-    if not args.fastmode:
+    if not args.fastmode:  # 不是快速模式，就重新用模型对图进行一次编码
         # Evaluate validation set performance separately,
         # deactivates dropout during validation run.
         model.eval()
@@ -179,7 +179,7 @@ def train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, da
     acc_val = accuracy(y_pre[idx_val], labels[idx_val])
     if acc_val > best_val_acc:
         best_val_acc = acc_val
-        best_model = dcp(model)
+        best_model = dcp(model)  # dcp保存在内存中，torch.save()保存到文件中，可以在其他环境中加载使用
             
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(loss_train.item()),
@@ -240,7 +240,7 @@ if torch.cuda.is_available():
 
 
 
-test_acc = torch.zeros(times)
+test_acc = torch.zeros(times)  # 保存test_acc结果
 if torch.cuda.is_available():
     test_acc = test_acc.cuda()
 
@@ -271,6 +271,7 @@ for i in range(times):
     
     # Train model
     t_total = time.time()
+    print(args)
     for epoch in range(args.epochs):
         train(model, optimizer, epoch, features, adj, idx_train, idx_val, labels, args.data_aug, args.encoder_type, args.debias, args.kk, args.sample_size, args.neg_type)
     print("Optimization Finished!")
@@ -291,3 +292,4 @@ print("10次标准差",test_acc.std())
 #import ipdb;ipdb.set_trace()
 
 print(test_acc)
+print(args)
